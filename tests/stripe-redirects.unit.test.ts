@@ -55,6 +55,7 @@ function createPriceList(recurringInterval = 'month', type = 'recurring') {
 
 afterEach(() => {
   delete mockedEnv.STRIPE_API_BASE_URL
+  delete mockedEnv.STRIPE_PORTAL_CONFIGURATION_ID
   mockedSupabaseAdmin.mockReset()
   vi.restoreAllMocks()
 })
@@ -81,6 +82,33 @@ describe('stripe redirect URL allowlist', () => {
     expect(createSession).toHaveBeenCalledWith({
       customer: 'cus_123',
       return_url: 'https://capgo.test/app/usage',
+    })
+  })
+
+  it('uses the configured coupon-enabled billing portal configuration', async () => {
+    mockedEnv.STRIPE_PORTAL_CONFIGURATION_ID = 'bpc_coupon_enabled'
+
+    const createSession = vi.fn().mockResolvedValue({ url: 'https://pay.capgo.test/p/session' })
+    const stripeClient = {
+      billingPortal: {
+        sessions: {
+          create: createSession,
+        },
+      },
+    } as any
+
+    vi.mocked(Stripe).mockImplementation(function () {
+      return stripeClient
+    } as any)
+
+    const { createPortal } = await import('../supabase/functions/_backend/utils/stripe.ts')
+    const result = await createPortal(createContext(), 'cus_123', '/app/usage')
+
+    expect(result.url).toBe('https://pay.capgo.test/p/session')
+    expect(createSession).toHaveBeenCalledWith({
+      customer: 'cus_123',
+      return_url: 'https://capgo.test/app/usage',
+      configuration: 'bpc_coupon_enabled',
     })
   })
 
@@ -136,6 +164,7 @@ describe('stripe redirect URL allowlist', () => {
 
     expect(result.url).toBe('https://pay.capgo.test/p/pay')
     expect(createSession).toHaveBeenCalledWith(expect.objectContaining({
+      allow_promotion_codes: true,
       success_url: 'https://capgo.test/app/success?success=true',
       cancel_url: 'https://capgo.test/app/cancel',
     }))

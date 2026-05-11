@@ -295,9 +295,11 @@ export async function createPortal(c: Context, customerId: string, callbackUrl: 
   if (!isStripeConfigured(c))
     return { url: '' }
   const allowedReturnUrl = getAllowedRedirectUrl(c, callbackUrl, 'return_url')
+  const portalConfigurationId = getEnv(c, 'STRIPE_PORTAL_CONFIGURATION_ID').trim()
   const session = await getStripe(c).billingPortal.sessions.create({
     customer: customerId,
     return_url: allowedReturnUrl,
+    ...(portalConfigurationId ? { configuration: portalConfigurationId } : {}),
   })
   return { url: session.url }
 }
@@ -500,6 +502,7 @@ export async function createCheckout(c: Context, customerId: string, recurrence:
   const allowedSuccessUrl = getAllowedRedirectUrl(c, successUrl, 'success_url')
   const allowedCancelUrl = getAllowedRedirectUrl(c, cancelUrl, 'cancel_url')
   const session = await getStripe(c).checkout.sessions.create({
+    allow_promotion_codes: true,
     billing_address_collection: 'auto',
     mode: 'subscription',
     customer: customerId,
